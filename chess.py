@@ -29,7 +29,16 @@ images = {
     'W': pygame.image.load("black_wall.png"),    
 
     'b': pygame.image.load("white_bishop.png"),
-    'B': pygame.image.load("black_bishop.png")       
+    'B': pygame.image.load("black_bishop.png"),    
+
+    'k': pygame.image.load("white_king.png"),
+    'K': pygame.image.load("black_king.png"),    
+
+    'q': pygame.image.load("white_queen.png"),
+    'Q': pygame.image.load("black_queen.png"),    
+
+    'm': pygame.image.load("move_outline.png"),
+    'M': pygame.image.load("move_full.png")         
 }
 
 # Chess Board Representation
@@ -44,8 +53,13 @@ board = [
     ['p', 'n', 'b', 'q', 'k', 'b', 'n', 'p']
 ]
 
+#help player w possible moves
+possible_moves = [[False for _ in range(8)] for _ in range(8)]
+
 # Add the "meta layer" array to represent the walls formed by two rooks of the same color
 meta_layer = [[" " for _ in range(8)] for _ in range(8)]
+
+start_pos = None
 
 # Add a global variable to store the color of the player whose move it is
 current_player_color = 'W'  # Assume it's White's turn at the start
@@ -79,45 +93,50 @@ def find_rooks_on_same_row_by_color(color):
 find_rooks_on_same_row()
 
 # Function to check if a position is blocked by a wall of the opposing player
-#   AND |   b     |    B
-#   w   |  False  |    True
-#   W   |  True   |    False
 def is_blocked_by_wall(row, col, piece):
-    print("checking if " + piece + " can walk onto " + meta_layer[row][col])
     return meta_layer[row][col] != ' ' and (meta_layer[row][col].isupper() != piece.isupper()) 
 
 
 def is_field_occupied(row,col,piece):
     is_occupied = board[row][col] != ' ' or is_blocked_by_wall(row,col,piece)
-    if is_occupied: print ("occupado!")
     return is_occupied
 
 # Function to display the board
 def draw_board(screen):
+    global start_pos
+
     for row in range(8):
         for col in range(8):
             #draw board itself
-            color = WHITE if (row + col) % 2 == 0 else GRASS_GREEN
+            color = WHITE if (row + col) % 2 == 0 else GRASS_GREEN # (125,125,125)
             pygame.draw.rect(screen, color, pygame.Rect(col * 80, row * 80, 80, 80))
+
+    if start_pos != None:
+        pygame.draw.rect(screen, RED, pygame.Rect(start_pos[1] * 80, start_pos[0] * 80, 80, 80))
+
+    for row in range(8):
+        for col in range(8):
+            # draw wall
+            wall = meta_layer[row][col]
+            if wall != ' ':
+                piece_rect = pygame.Rect(col * 80 - 50, row * 80 - 10, 40, 40)
+                piece_rect_right = pygame.Rect(col * 80 + 30, row * 80 - 10, 40, 40)
+                screen.blit(images[wall], piece_rect)  
+                screen.blit(images[wall], piece_rect_right)            
 
             # draw pieces
             piece = board[row][col]
             font = pygame.font.Font(None, 60)
-            piece_rect = pygame.Rect(col * 80 + 10, row * 80 + 10, 40, 40)
+            piece_rect = pygame.Rect(col * 80, row * 80, 40, 40)
             if piece in images:
                 screen.blit(images[piece], piece_rect)
             elif piece != ' ':
                 text = font.render(piece, True, GRAY if piece.isupper() else RED)
                 screen.blit(text, piece_rect)
 
-    # Draw lines between white rooks on the same row
-    for row in range(8):
-        for col in range(8):
-            # draw pieces
-            wall = meta_layer[row][col]
-            if wall == ' ': continue
-            piece_rect = pygame.Rect(col * 80 + 20, row * 80 + 10, 40, 40)
-            screen.blit(images[wall], piece_rect)
+            if start_pos != None:
+                if possible_moves[row][col]:
+                    screen.blit(images['M' if piece.isupper() else 'm'], pygame.Rect(col * 80, row * 80, 80, 80))                
     
 
 
@@ -134,12 +153,15 @@ def is_valid_move(piece, start_row, start_col, end_row, end_col):
 
     # Check if the path is blocked by a wall
     if is_blocked_by_wall(end_row, end_col, piece):
-        print("trying to walk onto opponent's wall (invalid)")
         return False
 
     # Movement logic for each piece
     piece_type = piece.upper()  # Make sure the piece is uppercase for simplicity
     if piece_type == 'R':
+        # Rooks cannot take rooks
+        if board[end_row][end_col].upper() == 'R':
+            return False
+
         # Rook moves horizontally or vertically
         if start_row == end_row and start_col != end_col:
             # Check for obstructions along the row
@@ -169,7 +191,9 @@ def is_valid_move(piece, start_row, start_col, end_row, end_col):
             middle_row = (start_row + end_row) // 2
             middle_col = (start_col + end_col) // 2
             if is_field_occupied(middle_row, middle_col, piece):
-                board[middle_row][middle_col] = ' '
+                if board[middle_row][middle_col].isupper() != piece.isupper():
+                    board[middle_row][middle_col] = ' '
+                return True
             else: return False
 
         return False
@@ -204,22 +228,15 @@ def is_valid_move(piece, start_row, start_col, end_row, end_col):
 
 # Function to update the board after a move
 def make_move(move):
-    global current_player_color
-    print(current_player_color)
+    global current_player_color, start_pos
 
     start_row, start_col = move[0]
     end_row, end_col = move[1]
 
     piece = board[start_row][start_col]
 
-
-    # Check if the piece belongs to the current player
-    if (current_player_color == 'B' and piece.islower()) or (current_player_color == 'W' and piece.isupper()):
-        print("Invalid move! It's the other player's turn.")
-        return
-
     print(f"Piece being moved: {piece}")  # Debug output
-    if is_valid_move(piece, start_row, start_col, end_row, end_col):
+    if possible_moves[end_row][end_col]:
         board[start_row][start_col] = ' '
 
         # check for "alpha knight" conversion
@@ -232,6 +249,8 @@ def make_move(move):
 
         # Switch the player's turn after a valid move
         current_player_color = 'W' if current_player_color == 'B' else 'B'        
+
+        start_pos = None  # Reset start_pos after the move
     else:
         print("Invalid move! Try again.")  
 
@@ -239,10 +258,10 @@ def make_move(move):
     find_rooks_on_same_row()    
 
 
-
-
 # Function to get player's move
-def get_move(start_pos):
+def get_move():
+    global start_pos
+
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -262,11 +281,20 @@ def get_move(start_pos):
                     return start_pos, end_pos
 
 
+def determine_possible_moves(piece):
+    global possible_moves, start_pos
 
+    possible_moves = [[False for _ in range(8)] for _ in range(8)]
 
+    for row in range(8):
+        for col in range(8):   
+            if is_valid_move(piece, start_pos[0], start_pos[1], row, col):
+                possible_moves[row][col] = True
 
 # Main game loop
 def play_chess():
+    global start_pos
+
     screen = pygame.display.set_mode((640, 640))
     pygame.display.set_caption("Chess")
 
@@ -290,12 +318,21 @@ def play_chess():
                     col, row = x // 80, y // 80
                     piece = board[row][col]
                     if piece != ' ':
-                        start_pos = (row, col)
-                        print(f"Start position: {start_pos}")  # Debug output
+                        # Check if the piece belongs to the current player
+                        if (current_player_color == 'B' and piece.islower()) or (current_player_color == 'W' and piece.isupper()):
+                            print("It's the other player's turn.")
+                        else:                        
+                            start_pos = (row, col)
+                            determine_possible_moves(piece)
+                            print(f"Start position: {start_pos}")  # Debug output
 
-        move = get_move(start_pos)
+        draw_board(screen)
+        pygame.display.flip()
+
+        move = get_move()
         make_move(move)
-        start_pos = None  # Reset start_pos after the move
+        start_pos = None
+        
 
 # Run the game
 if __name__ == "__main__":
