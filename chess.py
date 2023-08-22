@@ -12,6 +12,10 @@ GRASS_GREEN = (0, 125, 0)
 # Initialize Pygame
 pygame.init()
 
+board_bg = pygame.image.load("board.png")
+board_bg = pygame.transform.scale(board_bg, (640, 640))
+active_bg = pygame.image.load("active_bg.png")
+active_bg = pygame.transform.scale(active_bg, (80, 80))
 images = {
     'p': pygame.image.load("white_knight.png"),
     'P': pygame.image.load("black_knight.png"),
@@ -41,6 +45,9 @@ images = {
     'M': pygame.image.load("move_full.png")         
 }
 
+#images["P"] = pygame.image.load('alpha.png').convert(24)
+#images["P"].set_alpha(128)
+
 # Chess Board Representation
 board = [
     ['P', 'N', 'B', 'Q', 'K', 'B', 'N', 'P'],
@@ -59,7 +66,11 @@ possible_moves = [[False for _ in range(8)] for _ in range(8)]
 # Add the "meta layer" array to represent the walls formed by two rooks of the same color
 meta_layer = [[" " for _ in range(8)] for _ in range(8)]
 
+#for showing debug helpers
+debug_layer = [[" " for _ in range(8)] for _ in range(8)]
+
 start_pos = None
+screen = None
 
 # Add a global variable to store the color of the player whose move it is
 current_player_color = 'W'  # Assume it's White's turn at the start
@@ -96,47 +107,69 @@ find_rooks_on_same_row()
 def is_blocked_by_wall(row, col, piece):
     return meta_layer[row][col] != ' ' and (meta_layer[row][col].isupper() != piece.isupper()) 
 
+# check if you can jump over this field
+def is_crossing_wall(row, col, piece):
+    # when jumping / traveling, can't cross wall OR rook (used in horse "N")
+    return is_blocked_by_wall(row,col, piece) or (board[row][col].upper() == 'R' and board[row][col].isupper() != piece.isupper())
+
 
 def is_field_occupied(row,col,piece):
     is_occupied = board[row][col] != ' ' or is_blocked_by_wall(row,col,piece)
     return is_occupied
 
+def set_debug_layer(row,col):
+    debug_layer[row][col] = "y"
+
+#because you draw it with col as x coordinate which can be confusing, col coming first
+def draw_square_at(row,col,color):
+    global screen
+    pygame.draw.rect(screen, color, pygame.Rect(col * 80, row * 80, 80, 80))
+
 # Function to display the board
 def draw_board(screen):
-    global start_pos
+    global start_pos, board_bg
 
-    for row in range(8):
-        for col in range(8):
-            #draw board itself
-            color = WHITE if (row + col) % 2 == 0 else GRASS_GREEN # (125,125,125)
-            pygame.draw.rect(screen, color, pygame.Rect(col * 80, row * 80, 80, 80))
+    screen.blit(board_bg, (0,0))
 
     if start_pos != None:
-        pygame.draw.rect(screen, RED, pygame.Rect(start_pos[1] * 80, start_pos[0] * 80, 80, 80))
+        screen.blit(active_bg, (start_pos[1] * 80, start_pos[0] * 80))
 
     for row in range(8):
         for col in range(8):
+            #DEBUGHELPER
+            if debug_layer[row][col] != " ":
+                draw_square_at(row,col,RED)
+
             # draw wall
-            wall = meta_layer[row][col]
-            if wall != ' ':
-                piece_rect = pygame.Rect(col * 80 - 50, row * 80 - 10, 40, 40)
-                piece_rect_right = pygame.Rect(col * 80 + 30, row * 80 - 10, 40, 40)
-                screen.blit(images[wall], piece_rect)  
-                screen.blit(images[wall], piece_rect_right)            
+            #wall = meta_layer[row][col]
+            #if wall != ' ':
+            #    piece_rect = pygame.Rect(col * 80 - 50, row * 80 - 10, 40, 40)
+            #    piece_rect_right = pygame.Rect(col * 80 + 30, row * 80 - 10, 40, 40)
+            #    screen.blit(images[wall], piece_rect)  
+            #    screen.blit(images[wall], piece_rect_right)   
+
+            piece_at_square = board[row][col]
+
+            #draw valid move positions
+            if start_pos != None:
+                target = piece_at_square
+                piece = board[start_pos[0]][start_pos[1]]
+                if possible_moves[row][col]:
+                    if target != " ":
+                        screen.blit(images['M'], pygame.Rect(col * 80, row * 80, 80, 80))                
+                    else:
+                        screen.blit(images['m'], pygame.Rect(col * 80, row * 80, 80, 80))
 
             # draw pieces
-            piece = board[row][col]
             font = pygame.font.Font(None, 60)
             piece_rect = pygame.Rect(col * 80, row * 80, 40, 40)
-            if piece in images:
-                screen.blit(images[piece], piece_rect)
-            elif piece != ' ':
-                text = font.render(piece, True, GRAY if piece.isupper() else RED)
+            if piece_at_square in images:
+                screen.blit(images[piece_at_square], piece_rect)
+            elif piece_at_square != ' ':
+                text = font.render(piece_at_square, True, GRAY if piece_at_square.isupper() else RED)
                 screen.blit(text, piece_rect)
 
-            if start_pos != None:
-                if possible_moves[row][col]:
-                    screen.blit(images['M' if piece.isupper() else 'm'], pygame.Rect(col * 80, row * 80, 80, 80))                
+
     
 
 
@@ -185,14 +218,21 @@ def is_valid_move(piece, start_row, start_col, end_row, end_col):
         if row_diff <= 1 and col_diff <= 1:
             return True
 
+        # move in L shape
+        if (row_diff == 2 and col_diff == 1) or (row_diff == 1 and col_diff == 2):
+
+            #check for wall in between            
+            for i in range(start_row if start_row < end_row else end_row, end_row if start_row < end_row else start_row):
+                for j in range(start_col if start_col < end_col else end_col, end_col if start_col < end_col else start_col):
+                    if is_crossing_wall(i,j,piece): return False
+            return True
+
         # OR jumps over a piece 2 squares away
-        if row_diff + col_diff <= 4 and row_diff <= 2 and col_diff <= 2:
+        if (row_diff + col_diff == 4 or row_diff + col_diff == 2) and (row_diff == 2 or col_diff == 2):
             # Check for jumping over a neighboring piece
             middle_row = (start_row + end_row) // 2
             middle_col = (start_col + end_col) // 2
-            if is_field_occupied(middle_row, middle_col, piece):
-                if board[middle_row][middle_col].isupper() != piece.isupper():
-                    board[middle_row][middle_col] = ' '
+            if is_field_occupied(middle_row, middle_col, piece) and not is_blocked_by_wall(middle_row, middle_col, piece):
                 return True
             else: return False
 
@@ -222,7 +262,7 @@ def is_valid_move(piece, start_row, start_col, end_row, end_col):
         return abs(start_row - end_row) <= 1 and abs(start_col - end_col) <= 1
     elif piece_type == 'A':
         # Alpha moves two squares in any direction
-        return abs(start_row - end_row) <= 2 and abs(start_col - end_col) <= 2
+        return abs(start_row - end_row) <= 3 and abs(start_col - end_col) <= 3
 
     return False
 
@@ -242,8 +282,20 @@ def make_move(move):
         # check for "alpha knight" conversion
         if (piece == 'p' and end_row == 0):
             piece = 'a'
-        if (piece == 'P' and end_row == 7):
+        elif (piece == 'P' and end_row == 7):
             piece = 'A'
+        # horse can eliminate the piece he jumps over
+        elif piece.upper() == 'N':
+            row_diff = abs(start_row - end_row)
+            col_diff = abs(start_col - end_col)
+
+            # jumps over a piece, only allow taking a piece on the way when jumping in line or diagonally, not L shape
+            if (row_diff + col_diff == 4 or row_diff + col_diff == 2) and (row_diff == 2 or col_diff == 2):
+                # Check for jumping over a neighboring piece
+                middle_row = (start_row + end_row) // 2
+                middle_col = (start_col + end_col) // 2
+                if is_field_occupied(middle_row, middle_col, piece) and board[middle_row][middle_col].isupper() != piece.isupper():
+                    board[middle_row][middle_col] = " "
 
         board[end_row][end_col] = piece
 
@@ -293,7 +345,7 @@ def determine_possible_moves(piece):
 
 # Main game loop
 def play_chess():
-    global start_pos
+    global start_pos, screen
 
     screen = pygame.display.set_mode((640, 640))
     pygame.display.set_caption("Chess")
