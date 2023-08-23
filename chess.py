@@ -1,6 +1,14 @@
 import pygame
 import sys
 
+# TODOs
+# new bishop movement (anywhere + pawn attack range)
+# multiplayer
+# AI
+# winning condition
+# pawn cannot take alpha
+# write rulebook / video
+
 # Define colors
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
@@ -114,8 +122,10 @@ def is_crossing_wall(row, col, piece):
 
 
 def is_field_occupied(row,col,piece):
-    is_occupied = board[row][col] != ' ' or is_blocked_by_wall(row,col,piece)
-    return is_occupied
+    return is_field_occupied_by_piece(row,col,piece) or is_blocked_by_wall(row,col,piece)
+
+def is_field_occupied_by_piece(row,col,piece):
+    return board[row][col] != ' '
 
 def set_debug_layer(row,col):
     debug_layer[row][col] = "y"
@@ -237,19 +247,10 @@ def is_valid_move(piece, start_row, start_col, end_row, end_col):
             else: return False
 
         return False
+    # the BISHOP can move anywhere unoccupied but only attack like a pawn
     elif piece_type == 'B':
-        # Bishop moves diagonally
-        if abs(start_row - end_row) != abs(start_col - end_col):
-            return False
-        # Check for obstructions along the diagonal
-        step_row = 1 if start_row < end_row else -1
-        step_col = 1 if start_col < end_col else -1
-        row, col = start_row + step_row, start_col + step_col
-        while row != end_row and col != end_col:
-            if is_field_occupied(row,col,piece):
-                return False
-            row += step_row
-            col += step_col
+        if is_field_occupied(end_row,end_col,piece):
+            return abs(start_row - end_row) <= 1 and abs(start_col - end_col) <= 1
         return True
     elif piece_type == 'Q':
         # Queen moves one square diagonally
