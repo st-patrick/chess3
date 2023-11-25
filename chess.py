@@ -2,12 +2,17 @@ import pygame
 import sys
 
 # TODOs
-# new bishop movement (anywhere + pawn attack range)
 # multiplayer
+# write rulebook / instructions / video > ask chatgpt to extract custom rules from code
 # AI
+# create a funtion that applies a given function on all the fields and returns their (chained) return values
+# create function to get field clicked on (right now duplicate in get piece in main loop and get_move)
+# winning scenario art n stuff
+# animations
+# ---- DONEs ----
 # winning condition
-# pawn cannot take alpha
-# write rulebook / video
+# pawn can't take alpha
+# new bishop movement (anywhere + pawn attack range) DONE
 
 # Define colors
 WHITE = (255, 255, 255)
@@ -79,6 +84,7 @@ debug_layer = [[" " for _ in range(8)] for _ in range(8)]
 
 start_pos = None
 screen = None
+game_won = False
 
 # Add a global variable to store the color of the player whose move it is
 current_player_color = 'W'  # Assume it's White's turn at the start
@@ -126,6 +132,22 @@ def is_field_occupied(row,col,piece):
 
 def is_field_occupied_by_piece(row,col,piece):
     return board[row][col] != ' '
+
+# determine whether the game is won by one player and if so, which color
+def is_game_won():
+    global board
+    white_lost = True
+    black_lost = True
+
+    for row in range(8):
+        for col in range(8):
+            #DEBUGHELPER
+            if board[row][col] == "q" or board[row][col] == "k": white_lost = False
+            elif board[row][col] == "Q" or board[row][col] == "K": black_lost = False
+
+    if white_lost: return "black"
+    if black_lost: return "white"
+    return white_lost or black_lost
 
 def set_debug_layer(row,col):
     debug_layer[row][col] = "y"
@@ -178,20 +200,26 @@ def draw_board(screen):
             elif piece_at_square != ' ':
                 text = font.render(piece_at_square, True, GRAY if piece_at_square.isupper() else RED)
                 screen.blit(text, piece_rect)
+  
+# Function to display ui elements
+def draw_ui_message(screen, message):
+    pygame.draw.rect(screen, GREEN, (80,150,480,200), 5)
 
-
+    font = pygame.font.Font(None, 100)
+    text = font.render(message, True, BLACK)
+    text2 = font.render(message, True, WHITE)
+    screen.blit(text, (125,205,100,100))
+    screen.blit(text2, (130,200,100,100))
     
+  
 
 
+# check whether the given piece can move from its start to its end position by applying custom game logic
 def is_valid_move(piece, start_row, start_col, end_row, end_col):
-    # Ensure the piece being moved belongs to the current player
-    if piece.isupper() and board[start_row][start_col].islower():
-        return False
-    if piece.islower() and board[start_row][start_col].isupper():
-        return False
+    target = board[end_row][end_col]
 
     # Check for friendly fire
-    if board[end_row][end_col] != ' ' and board[end_row][end_col].isupper() == piece.isupper():
+    if target != ' ' and target.isupper() == piece.isupper():
         return False
 
     # Check if the path is blocked by a wall
@@ -202,7 +230,7 @@ def is_valid_move(piece, start_row, start_col, end_row, end_col):
     piece_type = piece.upper()  # Make sure the piece is uppercase for simplicity
     if piece_type == 'R':
         # Rooks cannot take rooks
-        if board[end_row][end_col].upper() == 'R':
+        if target.upper() == 'R':
             return False
 
         # Rook moves horizontally or vertically
@@ -259,6 +287,9 @@ def is_valid_move(piece, start_row, start_col, end_row, end_col):
         # King moves one square in non-diagonal directions
         return (abs(start_row - end_row) <= 1 and abs(start_col - end_col) == 0) or (abs(start_row - end_row) == 0 and abs(start_col - end_col) <= 1)        
     elif piece_type == 'P':
+        # pawn can't take alpha
+        if target.upper() == 'A': return False
+
         # Pawn moves one square in any direction
         return abs(start_row - end_row) <= 1 and abs(start_col - end_col) <= 1
     elif piece_type == 'A':
@@ -311,6 +342,7 @@ def make_move(move):
     find_rooks_on_same_row()    
 
 
+
 # Function to get player's move
 def get_move():
     global start_pos
@@ -346,7 +378,7 @@ def determine_possible_moves(piece):
 
 # Main game loop
 def play_chess():
-    global start_pos, screen
+    global start_pos, screen, game_won
 
     screen = pygame.display.set_mode((640, 640))
     pygame.display.set_caption("Chess")
@@ -359,6 +391,12 @@ def play_chess():
                 sys.exit()
 
         draw_board(screen)
+
+        game_won = is_game_won()
+        if game_won != False: 
+            print(game_won + " wins!")
+            draw_ui_message(screen, game_won + " wins!")
+
         pygame.display.flip()
 
         while start_pos is None:
