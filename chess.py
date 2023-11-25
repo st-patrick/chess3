@@ -9,6 +9,12 @@ import sys
 # create function to get field clicked on (right now duplicate in get piece in main loop and get_move)
 # winning scenario art n stuff
 # animations
+  # FIRST glide piece from start to end position
+    # change screen update from 
+      # only on moves / clicks
+      # to
+      # 60 times / second
+  # add sparks
 # ---- DONEs ----
 # winning condition
 # pawn can't take alpha
@@ -88,6 +94,32 @@ game_won = False
 
 # Add a global variable to store the color of the player whose move it is
 current_player_color = 'W'  # Assume it's White's turn at the start
+
+
+
+# whenever a piece glides to another position, if it touches a piece while gliding, then show a random of 3 to 5 sparks
+
+# HERE
+def glide_piece_to(start_pos, end_pos):
+    global screen, board
+
+    # Add animation or movement logic here to glide the piece from start_pos to end_pos
+    # You may want to update the screen and board accordingly
+
+    # Placeholder code (replace this with actual logic)
+    board[end_pos[0]][end_pos[1]] = board[start_pos[0]][start_pos[1]]
+    board[start_pos[0]][start_pos[1]] = ' '
+
+def show_sparks_of(position):
+    global screen
+
+    # Add animation or effect logic to show sparks at the specified position
+    # You may want to update the screen with the sparks effect
+
+    # Placeholder code (replace this with actual logic)
+    pygame.draw.circle(screen, (255, 255, 0), (position[1] * 80 + 40, position[0] * 80 + 40), 10)
+
+
 
 def find_rooks_on_same_row():
     global meta_layer
@@ -300,7 +332,7 @@ def is_valid_move(piece, start_row, start_col, end_row, end_col):
 
 # Function to update the board after a move
 def make_move(move):
-    global current_player_color, start_pos
+    global current_player_color, start_pos, end_pos
 
     start_row, start_col = move[0]
     end_row, end_col = move[1]
@@ -335,6 +367,7 @@ def make_move(move):
         current_player_color = 'W' if current_player_color == 'B' else 'B'        
 
         start_pos = None  # Reset start_pos after the move
+        end_pos = None  # Reset start_pos after the move
     else:
         print("Invalid move! Try again.")  
 
@@ -345,7 +378,7 @@ def make_move(move):
 
 # Function to get player's move
 def get_move():
-    global start_pos
+    global start_pos, end_pos
 
     while True:
         for event in pygame.event.get():
@@ -358,12 +391,19 @@ def get_move():
                 if start_pos is None:
                     piece = board[row][col]
                     if piece != ' ':
-                        start_pos = (row, col)
-                        print(f"Start position: {start_pos}")  # Debug output
+                        # Check if the piece belongs to the current player
+                        if (current_player_color == 'B' and piece.islower()) or (current_player_color == 'W' and piece.isupper()):
+                            print("It's the other player's turn.")
+                        else:                        
+                            start_pos = (row, col)
+                            determine_possible_moves(piece)
+                            print(f"Start position: {start_pos}")  # Debug output
                 else:
+                    # this is when the move / end position is determined by the player
                     end_pos = (row, col)
                     print(f"End position: {end_pos}")  # Debug output
                     return start_pos, end_pos
+                return
 
 
 def determine_possible_moves(piece):
@@ -378,12 +418,13 @@ def determine_possible_moves(piece):
 
 # Main game loop
 def play_chess():
-    global start_pos, screen, game_won
+    global start_pos, end_pos, screen, game_won
 
     screen = pygame.display.set_mode((640, 640))
     pygame.display.set_caption("Chess")
 
     start_pos = None  # Initialize start_pos here
+    end_pos = None  # Initialize start_pos here
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -391,38 +432,16 @@ def play_chess():
                 sys.exit()
 
         draw_board(screen)
+        pygame.display.flip()
 
         game_won = is_game_won()
         if game_won != False: 
             print(game_won + " wins!")
             draw_ui_message(screen, game_won + " wins!")
 
-        pygame.display.flip()
-
-        while start_pos is None:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    x, y = event.pos
-                    col, row = x // 80, y // 80
-                    piece = board[row][col]
-                    if piece != ' ':
-                        # Check if the piece belongs to the current player
-                        if (current_player_color == 'B' and piece.islower()) or (current_player_color == 'W' and piece.isupper()):
-                            print("It's the other player's turn.")
-                        else:                        
-                            start_pos = (row, col)
-                            determine_possible_moves(piece)
-                            print(f"Start position: {start_pos}")  # Debug output
-
-        draw_board(screen)
-        pygame.display.flip()
-
         move = get_move()
-        make_move(move)
-        start_pos = None
+        if end_pos != None: 
+            make_move(move)
         
 
 # Run the game
